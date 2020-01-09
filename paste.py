@@ -102,9 +102,9 @@ def deductContentType(filepath):
 
 textContentType = "text/plain; charset=utf-8"
 def sendToPaste(filePath, archive=False, contentType=None, data=False):
-    bucket = "paste/"
+    key = "paste/"
     if archive:
-        bucket = "archive/"
+        key = "archive/"
         
     sha = hashlib.sha224()
     sha.update(str(uuid.uuid4()).encode('utf-8'))
@@ -138,11 +138,11 @@ def sendToPaste(filePath, archive=False, contentType=None, data=False):
     #print(filename)
     s3 = boto3.resource('s3')
     if not data:
-        s3.Bucket("paskann.us").upload_file(filePath, bucket + filename, ExtraArgs={'ContentType':contentType}, Callback=ProgressPercentage(float(os.path.getsize(filePath))))
+        s3.Bucket("paskann.us").upload_file(filePath, key + filename, ExtraArgs={'ContentType':contentType}, Callback=ProgressPercentage(float(os.path.getsize(filePath))))
     else:
         #client = boto3.client('s3')
         #client = boto3.client('s3')
-        object = s3.Object('paskann.us', bucket + filename)
+        object = s3.Object('paskann.us', key + filename)
         object.put(Body=filePath, ContentType=contentType)
         """ExtraArgs={'ContentType':contentType}, Callback=ProgressPercentage(len(filePath)))"""
     print()
