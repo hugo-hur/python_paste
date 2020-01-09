@@ -133,9 +133,15 @@ def sendToPaste(filePath, archive=False, contentType=None, data=False):
             return "Could not deduct a proper extension"
         #contentType = 'image/png'
     
-    filename = 'pst' + sha.hexdigest() + extension
-    print(contentType)
-    #print(filename)
+    #TODO if archive, then preserve filename somehow and add key to the the filename
+    if archive:#string[string.rfind(os.path.sep)+1:]
+	#TODO remove the file extension from between
+        filename = filePath[filePath.rfind(os.path.sep)+1:]
+        filename = filename + sha.hexdigest()[-6:] + extension
+    else:
+        filename = 'pst' + sha.hexdigest() + extension
+    print("Content type: " + contentType)
+    print("Filename in bucket: "filename)
     s3 = boto3.resource('s3')
     if not data:
         s3.Bucket("paskann.us").upload_file(filePath, key + filename, ExtraArgs={'ContentType':contentType}, Callback=ProgressPercentage(float(os.path.getsize(filePath))))
