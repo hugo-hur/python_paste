@@ -136,42 +136,61 @@ def sendToPaste(filePath, archive=False, contentType=None, data=False):
         #contentType = 'image/png'
     
     #TODO if archive, then preserve filename somehow and add key to the the filename
-    if archive:#string[string.rfind(os.path.sep)+1:]
+    if archive and not data:#string[string.rfind(os.path.sep)+1:]
 	#Remove the file extension from between
         filename = filePath[filePath.rfind(os.path.sep)+1:]
         filename = os.path.splitext(filename) + sha.hexdigest()[-6:] + extension
-    else:
+    elif archive and data:#We got  data in and  want to archive it, add add a prefix to name
+        filename = "paste" + sha.hexdigest()[-6:] + extension
+    else:#Not archiving
         filename = 'pst' + sha.hexdigest() + extension
+        
     print("Content type: " + contentType)
+    filename = key + filename
     print("Filename in bucket: " + filename)
     s3 = boto3.resource('s3')
     if not data:
-        s3.Bucket("paskann.us").upload_file(filePath, key + filename, ExtraArgs={'ContentType':contentType}, Callback=ProgressPercentage(float(os.path.getsize(filePath))))
+        s3.Bucket("paskann.us").upload_file(filePath, filename, ExtraArgs={'ContentType':contentType}, Callback=ProgressPercentage(float(os.path.getsize(filePath))))
     else:
         #client = boto3.client('s3')
         #client = boto3.client('s3')
-        object = s3.Object('paskann.us', key + filename)
+        object = s3.Object('paskann.us', filename)
         object.put(Body=filePath, ContentType=contentType)
         """ExtraArgs={'ContentType':contentType}, Callback=ProgressPercentage(len(filePath)))"""
     print()
-    return "https://paskann.us/" + key + filename
+    return "https://paskann.us/" + filename
 
 
 parser = argparse.ArgumentParser(description='Paste data from clipboard or upload a file to s3')
-parser.add_argument('-p', help='Use data from clipboard')
-
+parser.add_argument('-p', '--paste', help='Use data from clipboard (choose clipboard)', action="store_true")
+parser.add_argument('-a', '--archive', help='If set, send the data to archive instead of standard storage tier', action="store_true")
+#parser.add_argument()
+parser.add_argument('-f', '--file', help='Path to file or directory to upload (choose file)')
+args = parser.parse_args()
+print(args)
+#exit()
+if not args.paste and args.file == None:
+    print("Error: you have to specify either a file to upload or the '-p' flag to use the clipboard contents.")
+    exit()
+if args.paste and args.file != None:
+    print("Error: cannot use paste data and file data at a same time")
+    exit()
 
 link = ""
-arg = sys.argv[1]
-a = False #TODO get if flag was given
-if arg == 'p':
+#arg = sys.argv[1]
+a = args.archive #Get if flag was given
+if args.paste:
     
-    data = klembord.get(["image/png","image/jpeg"])#, "CF_DSPBITMAP", "CF_BITMAP"])#, "text/plain"])
+    data = klembord.get(["text/plain", "image/png", "image/jpg", "image/jpeg", "image/gif", "image/svg+xml", "application/octet-stream"])#"image/jpeg"])#, "CF_DSPBITMAP", "CF_BITMAP"])#, "text/plain"])
     sorted_list = [i for i in data.keys()]
+    for k in sorted_list:
+        if data[k] != None:
+            print("There was data at " + k)
+        
     print(sorted_list)
     
     png = data['image/png']
-    jpg = data['image/jpeg']
+    jpg = data['application/octet-stream']
     text = klembord.get_text()
     #print(text)
     if text != None:
@@ -187,12 +206,12 @@ if arg == 'p':
         print("got png image data :3")
         link = sendToPaste(png, archive = a, contentType="image/png", data=True)
         print(link)
-    elif jpg != None and len(jpg) > 0:
+    """elif jpg != None and len(jpg) > 0:
         print("got jpg image data :3")
         link = sendToPaste(png, archive = a, contentType="image/jpeg", data=True)
-        print(link)
+        print(link)"""
         
 else:
-    link = sendToPaste(arg, archive = a)
+    link = sendToPaste(args.file, archive = a)
     print(link)
 klembord.set_text(link)
