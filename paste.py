@@ -8,6 +8,7 @@ import time
 import klembord
 import magic
 import argparse
+import glob
 
 class ProgressBar:
     def __init__(self, total, timeEst = True, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
@@ -84,7 +85,7 @@ class ProgressPercentage(object):
         self._size = filesize
         self._seen_so_far = 0
         self._lock = threading.Lock()
-        self._progressBar = ProgressBar(self._size)
+        self._progressBar = ProgressBar(self._size, length = 50)
     def __call__(self, bytes_amount):
         # To simplify we'll assume this is hooked up
         # to a single filename.
@@ -94,7 +95,9 @@ class ProgressPercentage(object):
             sys.stdout.flush()
 
 def deductContentType(filepath):
-    contentType = magic.Magic(mime=True, mime_encoding=True).from_file(filepath)
+    #contentType = magic.Magic(mime=True, mime_encoding=True).from_file(filepath)
+    with open(filepath, "rb") as file:
+        contentType = magic.Magic(mime=True, mime_encoding=True).from_buffer(file.read())
     if "inode/blockdevice" in contentType and "mp4" in filepath:
         #We deducted wrong type for the file, should be mp4 instead
         contentType = "video/mp4; charset=binary"
@@ -138,8 +141,10 @@ def sendToPaste(filePath, archive=False, contentType=None, data=False):
     #TODO if archive, then preserve filename somehow and add key to the the filename
     if archive and not data:#string[string.rfind(os.path.sep)+1:]
 	#Remove the file extension from between
+        
         filename = filePath[filePath.rfind(os.path.sep)+1:]
-        filename = os.path.splitext(filename) + sha.hexdigest()[-6:] + extension
+        tp = os.path.splitext(filename)
+        filename = tp[0] + ' ' + sha.hexdigest()[-6:] + tp[1]
     elif archive and data:#We got  data in and  want to archive it, add add a prefix to name
         filename = "paste" + sha.hexdigest()[-6:] + extension
     else:#Not archiving
@@ -164,18 +169,55 @@ def sendToPaste(filePath, archive=False, contentType=None, data=False):
 parser = argparse.ArgumentParser(description='Paste data from clipboard or upload a file to s3')
 parser.add_argument('-p', '--paste', help='Use data from clipboard (choose clipboard)', action="store_true")
 parser.add_argument('-a', '--archive', help='If set, send the data to archive instead of standard storage tier', action="store_true")
-#parser.add_argument()
+parser.add_argument('-r', '--recursive', help='If set will recursively traverse all matching paths', action="store_true")
 parser.add_argument('-f', '--file', help='Path to file or directory to upload (choose file)')
 args = parser.parse_args()
 print(args)
 #exit()
+
+files = []
+folders = []
+matches = ''
 if not args.paste and args.file == None:
     print("Error: you have to specify either a file to upload or the '-p' flag to use the clipboard contents.")
     exit()
 if args.paste and args.file != None:
     print("Error: cannot use paste data and file data at a same time")
     exit()
-
+if args.recursive and args.file == None:
+    print("Error: cannot use recursive search when no path is provided")
+    exit()
+if args.file != None:
+    matches = glob.glob(args.file)
+    
+if args.recursive:
+    print("Traversing recursively all matching folders")
+    for p in matches:
+        if os.path.isfile(p):
+            files.append(p)
+            #print("Folder " + str(p))
+        elif os.path.isdir(p):
+            folders.append(p)
+    #Search all the found folders
+    for fol in folders:
+        for r, d, f in os.walk(fol):
+            for file in f:
+                files.append(os.path.join(r, file))
+    #for f in files: print(f)
+    print("Found " + str(len(files)) + " to upload")
+    #exit()
+else:
+    for p in matches:
+        if os.path.isfile(p):
+            p = os.path.abspath(p)
+            files.append(p)
+            print("Found match " + p)
+    #print(files)
+    #exit()
+    
+if not args.paste and len(files) == 0:
+    print("No files match")
+    exit()
 link = ""
 #arg = sys.argv[1]
 a = args.archive #Get if flag was given
@@ -212,6 +254,11 @@ if args.paste:
         print(link)"""
         
 else:
-    link = sendToPaste(args.file, archive = a)
-    print(link)
-klembord.set_text(link)
+    links = []
+    for f in files:
+        link = sendToPaste(f, archive = a)
+        links.append(f + '\nin link: ' + link)
+        #print(link)
+    for link in links:
+        print(link)
+#klembord.set_text(link)
