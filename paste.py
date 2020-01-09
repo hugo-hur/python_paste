@@ -93,8 +93,19 @@ class ProgressPercentage(object):
             self._progressBar.update(int(self._seen_so_far))
             sys.stdout.flush()
 
+def deductContentType(filepath):
+    contentType = magic.Magic(mime=True, mime_encoding=True).from_file(filepath)
+    if "inode/blockdevice" in contentType and "mp4" in filepath:
+        #We deducted wrong type for the file, should be mp4 instead
+        contentType = "video/mp4; charset=binary"
+    return contentType
+
 textContentType = "text/plain; charset=utf-8"
-def sendToPaste(filePath, contentType=None, data=False):
+def sendToPaste(filePath, archive=False, contentType=None, data=False):
+    bucket = "paste/"
+    if archive:
+        bucket = "archive/"
+        
     sha = hashlib.sha224()
     sha.update(str(uuid.uuid4()).encode('utf-8'))
     if not data:
@@ -104,13 +115,14 @@ def sendToPaste(filePath, contentType=None, data=False):
     else:
         sha.update(filePath)
     
-    extension = ''
+    #extension = ""
+    #last5 = filePath[-5:]
+    extension = last5[lfilePath.find('.'):]
     if contentType == None:
-        last5 = filePath[-5:]
-        extension = last5[last5.find('.'):]
-        #print("ends in " + extension)
-        contentType = magic.Magic(mime=True, mime_encoding=True).from_file(filePath)
         
+        #print("ends in " + extension)
+        contentType = deductContentType(filePath)
+            
     else:
         #Set the proper extension
         if contentType == "image/png":
@@ -126,11 +138,11 @@ def sendToPaste(filePath, contentType=None, data=False):
     #print(filename)
     s3 = boto3.resource('s3')
     if not data:
-        s3.Bucket("paskann.us").upload_file(filePath, "paste/" + filename, ExtraArgs={'ContentType':contentType}, Callback=ProgressPercentage(float(os.path.getsize(filePath))))
+        s3.Bucket("paskann.us").upload_file(filePath, bucket + filename, ExtraArgs={'ContentType':contentType}, Callback=ProgressPercentage(float(os.path.getsize(filePath))))
     else:
         #client = boto3.client('s3')
         #client = boto3.client('s3')
-        object = s3.Object('paskann.us', "paste/" + filename)
+        object = s3.Object('paskann.us', bucket + filename)
         object.put(Body=filePath, ContentType=contentType)
         """ExtraArgs={'ContentType':contentType}, Callback=ProgressPercentage(len(filePath)))"""
     print()
@@ -138,11 +150,13 @@ def sendToPaste(filePath, contentType=None, data=False):
 
 
 arg = sys.argv[1]
+a = False #TODO get if flag was given
 if arg == 'p':
     
-    data = klembord.get(["image/png","image"])#, "CF_DSPBITMAP", "CF_BITMAP"])#, "text/plain"])
-    #sorted_list = [i for i in data.keys()]
-    #print(sorted_list)
+    data = klembord.get(["image/png","image/jpeg"])#, "CF_DSPBITMAP", "CF_BITMAP"])#, "text/plain"])
+    sorted_list = [i for i in data.keys()]
+    print(sorted_list)
+    
     image = data['image/png']
     text = klembord.get_text()
     #print(text)
@@ -152,11 +166,12 @@ if arg == 'p':
         text = text.strip(' \t\r\n\0')
         #Encode the text
         text = text.encode('utf-8')
-        print(sendToPaste(text, contentType=textContentType, data=True))
+        
+        print(sendToPaste(text, archive = a, contentType=textContentType, data=True))
         
     if image != None and len(image) > 0:
         print("got image data :3")
-        print(sendToPaste(image, contentType="image/png", data=True))
+        print(sendToPaste(image, archive = a, contentType="image/png", data=True))
         
         
-else: print(sendToPaste(arg))
+else: print(sendToPaste(arg, archive = a))
