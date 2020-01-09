@@ -117,7 +117,7 @@ def sendToPaste(filePath, archive=False, contentType=None, data=False):
     
     #extension = ""
     #last5 = filePath[-5:]
-    extension = last5[lfilePath.find('.'):]
+    extension = last5[filePath.find('.'):]
     if contentType == None:
         
         #print("ends in " + extension)
