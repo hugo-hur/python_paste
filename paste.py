@@ -7,7 +7,7 @@ import sys
 import time
 import klembord
 import magic
-
+import argparse
 
 class ProgressBar:
     def __init__(self, total, timeEst = True, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
@@ -117,9 +117,9 @@ def sendToPaste(filePath, archive=False, contentType=None, data=False):
     
     #extension = ""
     #last5 = filePath[-5:]
-    extension = last5[filePath.find('.'):]
-    if contentType == None:
-        
+    extension = ""
+    if contentType == None and not data:
+        extension = filePath[filePath.rfind('.'):]
         #print("ends in " + extension)
         contentType = deductContentType(filePath)
             
@@ -127,6 +127,8 @@ def sendToPaste(filePath, archive=False, contentType=None, data=False):
         #Set the proper extension
         if contentType == "image/png":
             extension = '.png'
+        elif contentType == "image/jpeg":
+            extension = '.jpg'
         elif contentType == textContentType:
             extension = '.txt'
         else:
@@ -135,13 +137,13 @@ def sendToPaste(filePath, archive=False, contentType=None, data=False):
     
     #TODO if archive, then preserve filename somehow and add key to the the filename
     if archive:#string[string.rfind(os.path.sep)+1:]
-	#TODO remove the file extension from between
+	#Remove the file extension from between
         filename = filePath[filePath.rfind(os.path.sep)+1:]
-        filename = filename + sha.hexdigest()[-6:] + extension
+        filename = os.path.splitext(filename) + sha.hexdigest()[-6:] + extension
     else:
         filename = 'pst' + sha.hexdigest() + extension
     print("Content type: " + contentType)
-    print("Filename in bucket: "filename)
+    print("Filename in bucket: " + filename)
     s3 = boto3.resource('s3')
     if not data:
         s3.Bucket("paskann.us").upload_file(filePath, key + filename, ExtraArgs={'ContentType':contentType}, Callback=ProgressPercentage(float(os.path.getsize(filePath))))
@@ -152,9 +154,14 @@ def sendToPaste(filePath, archive=False, contentType=None, data=False):
         object.put(Body=filePath, ContentType=contentType)
         """ExtraArgs={'ContentType':contentType}, Callback=ProgressPercentage(len(filePath)))"""
     print()
-    return "https://paskann.us/paste/" + filename
+    return "https://paskann.us/" + key + filename
 
 
+parser = argparse.ArgumentParser(description='Paste data from clipboard or upload a file to s3')
+parser.add_argument('-p', help='Use data from clipboard')
+
+
+link = ""
 arg = sys.argv[1]
 a = False #TODO get if flag was given
 if arg == 'p':
@@ -163,7 +170,8 @@ if arg == 'p':
     sorted_list = [i for i in data.keys()]
     print(sorted_list)
     
-    image = data['image/png']
+    png = data['image/png']
+    jpg = data['image/jpeg']
     text = klembord.get_text()
     #print(text)
     if text != None:
@@ -172,12 +180,19 @@ if arg == 'p':
         text = text.strip(' \t\r\n\0')
         #Encode the text
         text = text.encode('utf-8')
+        link = sendToPaste(text, archive = a, contentType=textContentType, data=True)
+        print(link)
         
-        print(sendToPaste(text, archive = a, contentType=textContentType, data=True))
+    if png != None and len(png) > 0:
+        print("got png image data :3")
+        link = sendToPaste(png, archive = a, contentType="image/png", data=True)
+        print(link)
+    elif jpg != None and len(jpg) > 0:
+        print("got jpg image data :3")
+        link = sendToPaste(png, archive = a, contentType="image/jpeg", data=True)
+        print(link)
         
-    if image != None and len(image) > 0:
-        print("got image data :3")
-        print(sendToPaste(image, archive = a, contentType="image/png", data=True))
-        
-        
-else: print(sendToPaste(arg, archive = a))
+else:
+    link = sendToPaste(arg, archive = a)
+    print(link)
+klembord.set_text(link)
